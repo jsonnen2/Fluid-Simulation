@@ -3,6 +3,7 @@ module GfxBase
 export Vec3, Vec2
 export OBJ, OBJTriangle, OBJMesh, Shape, Box, Sphere, Triangle
 export objects, num_particles, delta_time, simulation_steps, smoothing_radius, bounding_box
+export interpolate_normals, cap_acceleration
 
 using StaticArrays
 
@@ -39,6 +40,16 @@ Every type of object which can be placed in my scene. """
 abstract type Shape end
 struct OBJ <: Shape
     filename::String
+    translate::Union{Vec3, Nothing}
+    scale::Union{Vec3, Nothing}
+    rotate::Union{Tuple{Float64, Vec3, Vec3}, Nothing} # degrees, rotation axis, rotation center
+
+    # Constructor for full OBJ
+    OBJ(filename::String, translate::Union{Vec3, Nothing}, scale::Union{Vec3, Nothing}, rotate::Union{Tuple{Float64, Vec3, Vec3}, Nothing}) = 
+        new(filename, translate, scale, rotate)
+
+    # Constructor for simple OBJ
+    OBJ(filename::String) = new(filename, nothing, nothing, nothing)
 end
 struct Box <: Shape
     min::Vec3
@@ -54,20 +65,21 @@ global smoothing_radius::Float64 = 4.0
 
 # bounding box for the fluid
 global bounding_box = Box(Vec3(0,0,0), Vec3(50,50,50))
-
+bounding_box_center = Scalar(0.5) .* (bounding_box.max .- bounding_box.min)
 # Objects in the scene
 global objects = [
-    # Box(Vec3(30,30,30), Vec3(35,35,35)),
-    Sphere(Vec3(20,20,20), 5.0),
-    Sphere(Vec3(10,10,10), 10.0),
-    Sphere(Vec3(15,12,10), 4.0),
-    OBJ("Mesh/box.obj")
+    OBJ("Mesh/inside_box.obj", bounding_box_center, bounding_box_center, nothing)
 ]
+# toggle to use triangle surface normals, or to interpolate normals using the barycentric coordinates
+global interpolate_normals = true
+
+# maximum magnitude of acceleration allowed by the particles
+global cap_acceleration = 100
 
 # Real Time Simulation
 global delta_time::Float64 = 1/60
-global num_particles::Int = 10_000
-global simulation_steps::Int = 1
+global num_particles::Int = 100_000
+global simulation_steps::Int = 10
 
 
 end # module GfxBase

@@ -1,13 +1,19 @@
 
 """ OBJ file read/write code was written by Scott Wehrwein of Western Washington University. """
 
+#TODO: translate, scale, rotate triangle meshes.
+
 module Mesh
 
 export read_obj, write_obj, gen_mesh
+export translate, scale, rotate
 
 push!(LOAD_PATH, pwd())
 include("GfxBase.jl")
 using .GfxBase
+
+using StaticArrays
+using LinearAlgebra
 
 """ read_obj(obj_filename)
 Read a mesh in OBJ format from file obj_filename."""
@@ -78,7 +84,6 @@ function write_obj(obj_filename, mesh::OBJMesh)
     end
 end
 
-
 """ tri_vertex_str(triangle)
 Helper function for write_obj()
 Return a string with the indices of applicable positions, texture coordinates,
@@ -108,6 +113,35 @@ function tri_vertex_str(triangle::OBJTriangle)
     join(corners, " ")
 end
 
+function translate!(mesh::OBJMesh, translation::Vec3)
+    mesh.positions .+= Scalar(translation)
+end
+
+function scale!(mesh::OBJMesh, multiplier::Vec3)
+    mesh.positions .= (.*).(mesh.positions, Scalar(multiplier))
+    mesh.normals = normalize.((.*).(mesh.normals, Scalar(multiplier)))
+end
+
+function rotate!(mesh::OBJMesh, rotation::Tuple{Float64, Vec3, Vec3})
+    # Rotate object θ degrees about an axis of rotation at a specified center.
+    # Rodrigues' Formula
+    # v_rot = v * cosθ + cross(axis, v) * sinθ + axis * dot(axis, v) * (1 - cosθ)
+
+    θ, axis, center = rotation
+    axis = normalize(axis)
+
+    v = mesh.positions
+    v .-= Scalar(center)
+    v_rot = v .* Scalar(cos(θ)) .+ cross.(Scalar(axis), v) .* Scalar(sin(θ)) .+ Scalar(axis) .* dot.(Scalar(axis), v) .* Scalar(1 - cos(θ))
+    v_rot .+= Scalar(center)
+    mesh.positions .= v_rot
+
+    v = mesh.normals
+    v .-= Scalar(center)
+    v_rot = v .* Scalar(cos(θ)) .+ cross.(Scalar(axis), v) .* Scalar(sin(θ)) .+ Scalar(axis) .* dot.(Scalar(axis), v) .* Scalar(1 - cos(θ))
+    v_rot .+= Scalar(center)
+    mesh.normals .= v_rot
+end
 
 """ gen_mesh(outfile, geom, divisionsU, divisionsV)
 Generate a mesh and save the result in a file with name outfile.
@@ -115,7 +149,7 @@ geom may be "cube", "cylinder", or "sphere".
 Cylinder requires divisionsU; sphere requires divisionsU and divisionsV. """
 function gen_mesh(outfile, geom, divisionsU=0, divisionsV=0)
     if geom == "cube"
-        mesh = cube_mesh()
+        mesh = inside_cube_mesh()
     elseif geom == "cylinder"
         mesh = cylinder_mesh(divisionsU)
     elseif geom == "sphere"
@@ -124,7 +158,6 @@ function gen_mesh(outfile, geom, divisionsU=0, divisionsV=0)
         mesh = torus_mesh(divisionsU, divisionsV)
     end
     write_obj(outfile, mesh)
-    #TODO: Save a "base" .obj object which can be rotated, scaled, and translated.
 end
 
 """ cube_mesh()
@@ -161,6 +194,60 @@ function cube_mesh()
     push!(normals, Vec3(0, -1, 0)) # D
     push!(normals, Vec3(0, 0, 1)) # C
     push!(normals, Vec3(0, 0, -1)) # F
+
+    # 8 faces, 2 triangles each
+    push!(triangles, OBJTriangle([1, 2, 3], [1, 2, 3], [4, 4, 4])) # bottom face 1
+    push!(triangles, OBJTriangle([1, 3, 4], [1, 3, 4], [4, 4, 4])) # bottom face 2
+    push!(triangles, OBJTriangle([1, 5, 6], [4, 1, 2], [1, 1, 1])) # right face 1
+    push!(triangles, OBJTriangle([1, 6, 2], [4, 2, 3], [1, 1, 1])) # right face 2
+    push!(triangles, OBJTriangle([2, 6, 7], [4, 1, 2], [5, 5, 5])) # far face 1
+    push!(triangles, OBJTriangle([2, 7, 3], [4, 2, 3], [5, 5, 5])) # far face 2
+    push!(triangles, OBJTriangle([3, 7, 8], [2, 3, 4], [2, 2, 2])) # left face 1
+    push!(triangles, OBJTriangle([3, 8, 4], [2, 4, 1], [2, 2, 2])) # left face 2
+    push!(triangles, OBJTriangle([4, 8, 5], [2, 3, 4], [6, 6, 6])) # far face 1
+    push!(triangles, OBJTriangle([4, 5, 1], [2, 4, 1], [6, 6, 6])) # far face 2
+    push!(triangles, OBJTriangle([5, 8, 7], [1, 2, 3], [3, 3, 3])) # top face 1
+    push!(triangles, OBJTriangle([5, 7, 6], [1, 3, 4], [3, 3, 3])) # top face 2
+
+    # julia automatically returns the last value in the function:
+    OBJMesh(positions, uvs, normals, triangles)
+
+end
+
+""" cube_mesh()
+Return a new OBJMesh representing a 2x2x2 cube centered at the origin and
+axis-aligned. Surface normals point inside the cube because it is a boundary box. """
+function inside_cube_mesh()
+    positions = []
+    uvs = []
+    normals = []
+    triangles = []
+    # key to comments:
+    # L/R = x = right/left
+    # B/T = y = top/bottom
+    # C/F = z = close/far
+    push!(positions, Vec3(1, -1, -1)) # 1 RBC
+    push!(positions, Vec3(1, -1, 1)) # 2 RBF
+    push!(positions, Vec3(-1, -1, 1)) # 3 LBF
+    push!(positions, Vec3(-1, -1, -1)) # 4 LBC
+    push!(positions, Vec3(1, 1, -1)) # 5 RTC
+    push!(positions, Vec3(1, 1, 1)) # 6 RTF
+    push!(positions, Vec3(-1, 1, 1)) # 7 LTF
+    push!(positions, Vec3(-1, 1, -1)) # 8 LTC
+
+    # texture coordinates:
+    push!(uvs, Vec2(1, 1)) # TR
+    push!(uvs, Vec2(0, 1)) # TL
+    push!(uvs, Vec2(0, 0)) # BL
+    push!(uvs, Vec2(1, 0)) # BR
+
+    # normals:
+    push!(normals, Vec3(-1, 0, 0)) # R
+    push!(normals, Vec3(1, 0, 0)) # L
+    push!(normals, Vec3(0, -1, 0)) # U
+    push!(normals, Vec3(0, 1, 0)) # D
+    push!(normals, Vec3(0, 0, -1)) # C
+    push!(normals, Vec3(0, 0, 1)) # F
 
     # 8 faces, 2 triangles each
     push!(triangles, OBJTriangle([1, 2, 3], [1, 2, 3], [4, 4, 4])) # bottom face 1
@@ -220,9 +307,40 @@ and it has a similar seam around the inner surface of the doughnut hole; vertice
 each seam share a pair of texture coordinates, and single vertex, at the position (0,0,r−1) 
 where the seams meet, shares 4 texture coordinates. """
 function torus_mesh(N, M)
-   # TODO
+    # N = MAJOR axis # points around the torus
+    # M = MINOR axis # points on the tube
+    # begin at Vec3(1.0, 0.0, 0.0) 
+
+    inner_radius = 2.0
+    outer_radius = 0.5
+    
+    normals = Matrix{Vec3}(undef, N, M)
+    positions = Matrix{Vec3}(undef, N, M)
+    
+    domain = collect(1:N)
+    center_line = Scalar(inner_radius) .* Vec3.(cos.(2*pi .* domain ./ N), 0, sin.(2*pi .* domain ./ N))
+    # v is the center_line scaled to the radius of the tube
+    v = center_line .* Scalar(outer_radius / inner_radius)
+    # k is the axis of rotation in Rodrigues' formula
+    k = normalize.(cross.(v, Scalar(Vec3(0.0, 1.0, 0.0))))
+    for i in 1:M
+        θ = 2*pi/M * i
+        # Rodrigues' rotation formula
+        # v_rot = v * cosθ + cross(k, v)*sinθ + k*dot(k, v)*(1 - cosθ)
+        v_rot = v .* Scalar(cos(θ)) .+ cross.(k, v) .* Scalar(sin(θ)) .+ k .* dot.(k, v) .* Scalar(1 - cos(θ))
+        positions[:, i] .=  v_rot .+ center_line
+        normals[:, i] .= v_rot
+    end
+    domain = collect(1:M*N)
+    x_plus_one = domain .+ Scalar(1-M) .+ Scalar(M) .* min.(domain .% M, 1)
+    x_plus_M = (domain .+ M .- 1) .% (M*N) .+ 1
+    x_plus_one_and_M = (x_plus_one .+ M .- 1) .% (M*N) .+ 1
+    upper_tri = Vec3.(domain, x_plus_one, x_plus_M)
+    lower_tri = Vec3.(x_plus_one, x_plus_one_and_M, x_plus_M)
+    indices = vcat(upper_tri, lower_tri)
+
+    tris = [OBJTriangle(i, Vec3(0.0,0.0,0.0), i) for i in indices]
+    OBJMesh(vec(positions'), [Vec2(0,0)], vec(normals'), tris)
 end
-
-
 
 end #module

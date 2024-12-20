@@ -10,6 +10,7 @@ using ..GfxBase
 using ..Hash
 using ..Collision
 using StaticArrays
+using LinearAlgebra
 
 
 function calc_density_and_pressure(position::Vector{Vec3}, mass::Vector{Float64}, hash::Dict{Int, Vector{Int}})
@@ -23,22 +24,40 @@ function calc_density_and_pressure(position::Vector{Vec3}, mass::Vector{Float64}
 
     #TODO: there has got to be a better way of dealing with 0 density in a cell
     # I initialize to epsilon bc in later calculations I divide by density (avoiding divide by 0 errors)
-    density = fill(1e-10, num_particles) # grams per cubic centimeter
+    density = zeros(num_particles) # grams per cubic centimeter
     pressure = zeros(num_particles) # Pascal ≡ Newton per square meter
 
     hash_max = Hash.coordinate_to_cell_int(bounding_box.max)
     # iterate over cells
-    for cell in 1:hash_max
+    for cell in 0:hash_max
 
         nearby_indices::Vector{Int} = Hash.find_neighbors(cell, hash)
         cell_indices::Vector{Int} = hash[cell]
 
         for i in cell_indices
-            density[i] += sum(mass[nearby_indices] .* kernel_funct(position[nearby_indices], position[i]))
+            density[i] = sum(mass[nearby_indices] .* kernel_funct(position[nearby_indices], position[i]))
             # Cole equation 
             coeff = sound^2 / adiabatic_index
             pressure[i] = coeff * ((density[i] / rest_density)^adiabatic_index - 1) + atmospheric_pressure
         end
+    end
+    mask = findall(x -> (x == 0), density)
+    if length(mask) != 0
+        println(mask)
+        println("density is 0.0")
+        println(density[mask])
+        cell = Hash.coordinate_to_cell_int(position[mask[1]])
+        nearby_int = Hash.adjacent_cells_int(cell)
+        println()
+        println(cell)
+        println(nearby_int)
+        println()
+        nearby_indices = Hash.find_neighbors(cell, hash)
+        kernel = kernel_funct(position[nearby_indices], position[mask[1]])
+        println(kernel)
+        
+        println()
+        error()
     end
     return density, pressure
 end
@@ -55,11 +74,11 @@ function apply_forces(position::Vector{Vec3}, velocity::Vector{Vec3}, density::V
         nearby::Vector{Int} = Hash.find_neighbors(cell, hash)
         cell_indices::Vector{Int} = hash[cell]
 
-        for i in cell_indices # TODO: parallelize (thread) this loop
+        for i in cell_indices # TODO: thread this loop
 
             # Use Navier Stokes equation for incompressible fluids.
             # Calculate the force applied to a particle from: gravity, pressure, & viscosity.
-            visc_coeff = Scalar(1) # 1e-3 = viscosity coefficient of water 
+            visc_coeff = 1 # 1e-3 = viscosity coefficient of water 
             gravitational_force = @SVector [0, -9.81 * mass[i], 0] # gravitational force on Earth
 
             # (pressure[i] / density[i]^2 + pressure / density^2) * mass^2 * kernel_gradient() * density[i]
@@ -67,15 +86,32 @@ function apply_forces(position::Vector{Vec3}, velocity::Vector{Vec3}, density::V
             kernel = kernel_gradient(position[nearby], position[i])
             pressure_force = summation .* mass[nearby] .* kernel .* density[i]
 
+            mask = findall(x -> any(isnan.(x)), pressure_force)
+            if length(mask) != 0
+                println(mask)
+                println("p force")
+                println(pressure_force[mask])
+                println()
+                println(summation[mask]) #Inf
+                println(kernel[mask]) # [0...]
+                println(density[i]) # 0
+                println(mass[nearby]) # [100...]
+            end
+
+            # TODO: vorticity confinement
             # visc_coeff * mass^2 * (velocity - velocity[i]) / density * kernel()
             diff = velocity[nearby] .- Scalar(velocity[i])
             kernel = kernel_funct(position[nearby], position[i])
             viscosity_force = Scalar(visc_coeff) .* mass[nearby].^2 .* diff .* kernel ./ density[nearby]
             
             force = gravitational_force .- sum(pressure_force) .+ sum(viscosity_force)
-            acceleration[i] = force ./ density[i] # TODO: should I use density or mass?
+            acceleration[i] = force ./ mass[i] # TODO: should I use density or mass?
         end
     end
+    # TODO: acceleration is NaN after 40 timesteps
+    # Reduce accelerations whose magnitudes greater than the cap
+    mask = (cap_acceleration .< norm.(acceleration))
+    acceleration[mask] .= cap_acceleration .* normalize.(acceleration[mask])
     return acceleration
 end
 
@@ -86,10 +122,6 @@ function update_position_and_velocity(position::Vector{Vec3}, position_prev::Vec
     acc_term = acceleration .* Scalar(delta_time^2)
     new_position = position .+ position .- position_prev .+ acc_term
     new_velocity = (new_position .- position) ./ Scalar(delta_time)
-    
-    # if new_position lies outside of my bounding box, perform reflections to move it back inside. 
-    # @time new_position = Collision.handle_collisions(new_position, position, objects)
-    # @time new_position = Collision.handle_collisions(new_position, position, objects)
     
     return new_position, position, new_velocity
 end
@@ -108,7 +140,7 @@ function kernel_funct(nearby::Vector{Vec3}, center::Vec3)
     # "Coding Adventure: Simulating Fluids". Timestamp= 20:21
     distance::Vector{Float64} = euc_distance(nearby, center)
     clamp!(distance, 0.0, smoothing_radius)
-    distance .= ifelse.(distance .== 0.0, smoothing_radius, distance) #TODO: is this O(n)?
+    # distance .= ifelse.(distance .== 0.0, smoothing_radius, distance) #TODO: is this O(n)?
     
     coeff = (15/pi) / smoothing_radius^4
     return coeff .* (smoothing_radius .- distance).^3

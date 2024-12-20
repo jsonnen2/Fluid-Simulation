@@ -15,7 +15,7 @@ using .Hash
 using StaticArrays
 
 
-function generate_hash(position::Vector{Vec3})
+function generate_hash(position::Vector{Vec3}, position_prev::Vector{Vec3})
 
     # Generate a dictionary which stores each particle that is within a cell. Cells are unit cubes in R^3.
     # key: cell number => value: list of particle indices
@@ -27,9 +27,8 @@ function generate_hash(position::Vector{Vec3})
     # overkill in the size of my dictionary. A particle could exist on the boundary line and it would
     #   be placed into its own cell that only boundary line paritcles could live on. 
 
-
     max_cell = Hash.coordinate_to_cell_int(bounding_box.max)
-    storage = Dict(i => Int[] for i in 1:max_cell)
+    storage = Dict(i => Int[] for i in 0:max_cell)
 
     for (idx, pos) in enumerate(position)
         cell = Hash.coordinate_to_cell_int(pos)
@@ -47,14 +46,17 @@ function render_pipeline()
     
     position_prev = copy(position)
     velocity = [@SVector zeros(3) for _ in 1:num_particles] # fluid begins at rest
-    mass = fill(1000.0, num_particles) # fluid has unit volume
+    mass = fill(100.0, num_particles) # fluid has unit volume
+
+    # warm up. For whatever reason, the first call to Collision.jl takes >2 seconds.
+    # @time Collision.handle_collisions(position, position_prev, objects)
 
     # Collision.handle_collisions(position, position_prev, objects) # TODO: soln for comiling time
     for i in 1:simulation_steps
         println(i)
 
         # Store particles into cells using an indexing technique
-        @time hashed_particles::Dict{Int, Vector{Int}} = generate_hash(position)
+        @time hashed_particles::Dict{Int, Vector{Int}} = generate_hash(position, position_prev) #TODO: remove position_prev (debugging tool)
         
         # Calculate density and pressure
         @time density, pressure = Math.calc_density_and_pressure(position, mass, hashed_particles)
@@ -62,13 +64,42 @@ function render_pipeline()
         # Calculate acceleration using the Navier Stokes equation for incompressible fluids
         @time acceleration = Math.apply_forces(position, velocity, density, pressure, mass, hashed_particles)
         
-        # Update position and velocity of particles in the system. Also handles collisions with objects. 
+        # Update position and velocity of particles in the system. 
         @time position, position_prev, velocity = Math.update_position_and_velocity(position, position_prev, velocity, acceleration, delta_time)
-        
-        @time position = Collision.handle_collisions(position, position_prev, objects)
-        @time position = Collision.handle_collisions(position, position_prev, objects)
-        # display particles-- wrap function with user input to pause/play, & step forward by 1 timestep
+        save_prev = copy(position_prev)
+        save_pos = copy(position)
 
+        # The path between position and position_prev is traced as a ray. Any ray which collides with
+        # an object in the scene is reflected according to the surface normal. 
+        @time position = Collision.handle_collisions(position, position_prev, objects)
+
+        # for debugging
+        outside = findall(x -> any(x .< bounding_box.min), position)
+        if length(outside) != 0
+            println(length(position))
+            println((outside))
+            println(save_prev[outside])
+            println()
+            println(save_pos[outside])
+            println()
+            println(position[outside])
+            println()
+        end   
+        
+        outside = findall(x -> any(isnan.(x)), position)
+        if length(outside) != 0
+            println(length(position))
+            println((outside))
+            println(save_prev[outside])
+            println()
+            println(save_pos[outside])
+            println()
+            println(position[outside])
+            println()
+            println(acceleration[outside])
+        end   
+        
+        # display particles-- wrap function with user input to pause/play, & step forward by 1 timestep
     end
 end
 @time render_pipeline()
