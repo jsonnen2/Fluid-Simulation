@@ -8,11 +8,43 @@ push!(LOAD_PATH, pwd())
 include("GfxBase.jl")
 using .GfxBase
 # using ..GfxBase
+using StaticArrays
 
 export adjacent_cells_int, adjacent_cells_tuple
 export coordinate_to_cell_int, coordinate_to_cell_tuple
 export cell_tuple_to_int, cell_int_to_tuple
 export find_neighbors
+
+
+function generate_hash(position::Vector{Vec3})
+
+    # Generate a dictionary which stores each particle that is within a cell. Cells are unit cubes in R^3.
+    # key: cell number => value: list of particle indices
+    # Runtime = O(num_particles)
+
+    # PROBLEMS
+    # wrap-around in Hash.adjacent_cells_int. Basically, I don't check if the cell exists on the 
+    #   other side of the bounding box. 
+    # overkill in the size of my dictionary. A particle could exist on the boundary line and it would
+    #   be placed into its own cell that only boundary line paritcles could live on. 
+
+    max_cell = Hash.coordinate_to_cell_int(bounding_box.max)
+    storage = Dict(i => Int[] for i in 0:max_cell)
+
+    # TODO: broadcast to find cell from position
+    num_cells = Int.(ceil.((bounding_box.max .- bounding_box.min) ./ smoothing_radius))
+    range = bounding_box.max .- bounding_box.min
+    discretized_position = (position .- Scalar(bounding_box.min)) ./ Scalar(range) .* Scalar(num_cells)
+    discretized_position = [Int.(floor.(pos)) for pos in discretized_position]
+    # TODO: convert position to scale uniformly from 1 to num_cells
+    cells = getindex.(discretized_position, 1) .* Scalar(num_cells[2] * num_cells[3]) .+
+            getindex.(discretized_position, 2) .* Scalar(num_cells[3]) .+
+            getindex.(discretized_position, 3)
+
+    [push!(storage[c], i) for (i, c) in enumerate(cells)]
+
+    return storage
+end
 
 function find_neighbors(cell::Int, hash::Dict{Int, Vector{Int}}) :: Vector{Int}
     # Given cell::Int and hash::Dict{Int, Vector{Int}}
@@ -21,10 +53,10 @@ function find_neighbors(cell::Int, hash::Dict{Int, Vector{Int}}) :: Vector{Int}
     nearby_indices = adjacent_cells_int(cell)
     storage = []
     for idx in nearby_indices
-        if idx == 2198
-            println(cell)
-            println(nearby_indices)
-        end
+        # if idx == 2198 1099 157 7 2
+        #     println(cell)
+        #     println(nearby_indices)
+        # end
         append!(storage, hash[idx])
     end
     return storage

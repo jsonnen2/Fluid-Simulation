@@ -41,6 +41,7 @@ function calc_density_and_pressure(position::Vector{Vec3}, mass::Vector{Float64}
             pressure[i] = coeff * ((density[i] / rest_density)^adiabatic_index - 1) + atmospheric_pressure
         end
     end
+    # Debug!!! if statement fails when density is 0.0
     mask = findall(x -> (x == 0), density)
     if length(mask) != 0
         println(mask)
@@ -57,7 +58,7 @@ function calc_density_and_pressure(position::Vector{Vec3}, mass::Vector{Float64}
         println(kernel)
         
         println()
-        error()
+        error() # ERROR
     end
     return density, pressure
 end
@@ -74,7 +75,8 @@ function apply_forces(position::Vector{Vec3}, velocity::Vector{Vec3}, density::V
         nearby::Vector{Int} = Hash.find_neighbors(cell, hash)
         cell_indices::Vector{Int} = hash[cell]
 
-        for i in cell_indices # TODO: thread this loop
+        # for i in cell_indices # TODO: thread this loop
+        Threads.@threads for i in cell_indices
 
             # Use Navier Stokes equation for incompressible fluids.
             # Calculate the force applied to a particle from: gravity, pressure, & viscosity.

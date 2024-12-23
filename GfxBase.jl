@@ -61,13 +61,17 @@ struct Sphere <: Shape
 end
 
 # also cell_size
-global smoothing_radius::Float64 = 4.0
+global smoothing_radius::Float64 = 400.0
 
 # bounding box for the fluid
-global bounding_box = Box(Vec3(0,0,0), Vec3(50,50,50))
-bounding_box_center = Scalar(0.5) .* (bounding_box.max .- bounding_box.min)
+global bounding_box = Box(Vec3(0,0,0), Vec3(5000,5000,5000))
+    # TODO: default not nothing. 50 cell width : 4 radius
+    bounding_box_center = Scalar(0.5) .* (bounding_box.max .- bounding_box.min) # TODO: OBJ default values are from this equation
+
+
 # Objects in the scene
 global objects = [
+    # TODO: User shouldn't computer bb_center. Set this to default
     OBJ("Mesh/inside_box.obj", bounding_box_center, bounding_box_center, nothing)
 ]
 # toggle to use triangle surface normals, or to interpolate normals using the barycentric coordinates
@@ -78,8 +82,9 @@ global cap_acceleration = 100
 
 # Real Time Simulation
 global delta_time::Float64 = 1/60
-global num_particles::Int = 100_000
+global num_particles::Int = 10000
 global simulation_steps::Int = 10
+
 
 
 end # module GfxBase
