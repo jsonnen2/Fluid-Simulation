@@ -1,7 +1,7 @@
 
 """ OBJ file read/write code was written by Scott Wehrwein of Western Washington University. """
 
-#TODO: translate, scale, rotate triangle meshes.
+#COMPLETE: translate, scale, rotate triangle meshes.
 
 module Mesh
 

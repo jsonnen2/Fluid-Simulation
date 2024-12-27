@@ -1,9 +1,9 @@
 module GfxBase
 
 export Vec3, Vec2
-export OBJ, OBJTriangle, OBJMesh, Shape, Box, Sphere, Triangle
+export OBJ, OBJTriangle, OBJMesh, Shape, Box, Sphere, Triangle, Camera
 export objects, num_particles, delta_time, simulation_steps, smoothing_radius, bounding_box
-export interpolate_normals, cap_acceleration
+export interpolate_normals, cap_acceleration, camera, width, height, global_filepath
 
 using StaticArrays
 
@@ -64,10 +64,9 @@ end
 global smoothing_radius::Float64 = 400.0
 
 # bounding box for the fluid
-global bounding_box = Box(Vec3(0,0,0), Vec3(5000,5000,5000))
-    # TODO: default not nothing. 50 cell width : 4 radius
-    bounding_box_center = Scalar(0.5) .* (bounding_box.max .- bounding_box.min) # TODO: OBJ default values are from this equation
-
+global bounding_box = Box(Vec3(0,0,0), Vec3(50,50,50))
+# TODO: default not nothing. 50 cell width : 4 radius
+bounding_box_center = Scalar(0.5) .* (bounding_box.max .- bounding_box.min) # TODO: OBJ default values are from this equation
 
 # Objects in the scene
 global objects = [
@@ -77,14 +76,26 @@ global objects = [
 # toggle to use triangle surface normals, or to interpolate normals using the barycentric coordinates
 global interpolate_normals = true
 
+# Camera to view the scene
+mutable struct Camera
+    origin::Vec3
+    view::Vec3
+    up::Vec3
+    focal::Float64
+end
+global camera = Camera(Vec3(0,0,10), Vec3(0,0,1), Vec3(0,1,0), 1.0)
+# width, height of image in pixels
+global width = 400
+global height = 400
+
 # maximum magnitude of acceleration allowed by the particles
 global cap_acceleration = 100
 
 # Real Time Simulation
 global delta_time::Float64 = 1/60
-global num_particles::Int = 10000
+global num_particles::Int = 10
 global simulation_steps::Int = 10
-
+global global_filepath::String = "C:/J/Unity/Assets/Saved_Fluid_Sims/particle_10.txt"
 
 
 end # module GfxBase

@@ -25,7 +25,9 @@ function simulate_fluids()
     velocity = [@SVector zeros(3) for _ in 1:num_particles] # fluid begins at rest
     mass = fill(100.0, num_particles) # fluid has unit volume
 
-    # warm up. Load all files using Julia's Just in Time Compiler
+    Hash.init_file(global_filepath) # create or clear the file located at filepath
+
+    # warm up. Load all files using Julia's just in time Compiler
     print("Warm up.................... ")
     @time Collision.handle_collisions(position, position_prev, objects)
 
@@ -49,12 +51,19 @@ function simulate_fluids()
         print("Update position............. ")
         @time position, position_prev, velocity = Math.update_position_and_velocity(position, position_prev, velocity, acceleration, delta_time)
 
-        # The path between position and position_prev is traced as a ray. Any ray which collides with
+        # A ray is traced between position and position_prev. Any ray which collides with
         # an object in the scene is reflected according to the surface normal. 
         print("Detect collisions........... ")
         @time position = Collision.handle_collisions(position, position_prev, objects)
         
         # display particles-- wrap function with user input to pause/play, & step forward by 1 timestep
+        # print("Display particles........... ")
+        # @time Hash.convert_to_camera_coords(position)
+
+        # Save position to an output file
+        print("Saving particles............ ")
+        @time Hash.save_to_file(position, global_filepath)
+        
     end
 end
 @time simulate_fluids()
