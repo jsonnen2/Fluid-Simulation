@@ -8,9 +8,10 @@ module Mesh
 export read_obj, write_obj, gen_mesh
 export translate, scale, rotate
 
-push!(LOAD_PATH, pwd())
-include("GfxBase.jl")
-using .GfxBase
+# push!(LOAD_PATH, pwd())
+# include("GfxBase.jl")
+# using .GfxBase
+using ..GfxBase
 
 using StaticArrays
 using LinearAlgebra

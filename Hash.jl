@@ -4,10 +4,8 @@
 
 module Hash
 
-push!(LOAD_PATH, pwd())
-include("GfxBase.jl")
-using .GfxBase
-# using ..GfxBase
+using ..GfxBase
+using ..Mesh
 using StaticArrays
 using LinearAlgebra
 
@@ -23,11 +21,10 @@ function generate_hash(position::Vector{Vec3})
     # key: cell number => value: list of particle indices
     # Runtime = O(num_particles)
 
-    # PROBLEMS
-    # wrap-around in Hash.adjacent_cells_int. Basically, I don't check if the cell exists on the 
-    #   other side of the bounding box. 
-    # overkill in the size of my dictionary. A particle could exist on the boundary line and it would
-    #   be placed into its own cell that only boundary line paritcles could live on. 
+    
+    # Ensure boundary conditions are met.
+    @assert all(x -> all(x .>= bounding_box.min), position) "Coordinate is out of bounds (less than min)"
+    @assert all(x -> all(x .<= bounding_box.max), position) "Coordinate is out of bounds (greater than max)"
 
     max_cell = Hash.coordinate_to_cell_int(bounding_box.max)
     storage = Dict(i => Int[] for i in 0:max_cell)
@@ -42,7 +39,14 @@ function generate_hash(position::Vector{Vec3})
             getindex.(discretized_position, 2) .* Scalar(num_cells[3]) .+
             getindex.(discretized_position, 3)
 
-    [push!(storage[c], i) for (i, c) in enumerate(cells)]
+    for (index, cell_id) in enumerate(cells)
+        if cell_id == 2197 ## DEBUG
+            println(position[index])
+        elseif cell_id < 0
+            println(position[index])
+        end
+        push!(storage[cell_id], index)
+    end
 
     return storage
 end
@@ -50,6 +54,7 @@ end
 function find_neighbors(cell::Int, hash::Dict{Int, Vector{Int}}) :: Vector{Int}
     # Given cell::Int and hash::Dict{Int, Vector{Int}}
     # Return Vector{Int} which are all indices of all neighbors AND itself
+    # TODO: slow. ~0.1 seconds for 10k
 
     nearby_indices = adjacent_cells_int(cell)
     storage = []
@@ -130,6 +135,30 @@ function cell_tuple_to_int(cell::Tuple{Int, Int, Int})::Int
     return i
 end
 
+function init_position(volume::Box, type::String)
+    if type == "uniform"
+        n = round(Int, num_particles^(1/3))
+        if n^3 < num_particles
+            n += 1
+        end
+        spacing::Vec3 = (volume.max .- volume.min) ./ n
+        x = collect(0:n-1) .* spacing[1] .+ spacing[1] / 2
+        x = repeat(x, n^2)[1:num_particles]
+        y = collect(0:n-1) .* spacing[2] .+ spacing[2] / 2
+        y = repeat(repeat(y, inner=n), n)[1:num_particles]
+        z = collect(0:n-1) .* spacing[3] .+ spacing[3] / 2
+        z = repeat(z, inner=n^2)[1:num_particles]
+
+        position = [@SVector [a,b,c] for (a,b,c) in zip(x,y,z)]
+    elseif type == "random"
+        # initialize position to a random location within my volume
+        position = [@SVector rand(3) for _ in 1:num_particles]
+        position = (.*).(position, Scalar((volume.max .- volume.min)))
+        position .+= Scalar(volume.min)
+    end
+    return position
+end
+
 function convert_to_camera_coords(position::Vector{Vec3})
 
     # Convert position from world coordinates (x,y,z) into camera coords (i,j,k)
@@ -176,6 +205,7 @@ function convert_to_camera_coords(position::Vector{Vec3})
     #     end
     # end
 
+    # TODO: use a sorting alg with benefits most from nearly sorted data.
     # # Sort hash according to z_buffer
     # for key in keys(hash)
     #     sorted_indices = sortperm(z_buffer[key])
@@ -192,12 +222,71 @@ function init_file(filepath::String)
         rm(filepath)
     end
     touch(filepath)
+
+    folderpath = first(split(filepath, ".txt"))
+    if ispath(folderpath)
+        rm(folderpath, recursive=true)
+    end
+    mkdir(folderpath)
 end
 
-function save_to_file(position::Vector{Vec3}, filepath::String)
+function save_to_file(position::Vector{Vec3}, velocity::Vector{Vec3}, filepath::String)
     # Use standard out to convert position::Vector{Vec3} to a string 
+
+    mag = sqrt.(getindex.(velocity, 1).^2 .+ 
+                getindex.(velocity, 2).^2 .+
+                getindex.(velocity, 3).^2)
+    color_scalar = mag ./ Scalar(maximum(mag))
+    four_vector= [@SVector [pos[1], pos[2], pos[3], color] for (pos, color) in zip(position, color_scalar)]
     open(filepath, "a") do io
-        println(io, position)
+        println(io, four_vector)
+    end
+end
+
+function save_scene_objects(objects::Vector{<:Shape}, local_folder::String)
+    # create local_folder
+    if !isdir(local_folder)
+        mkdir(local_folder)
+    end
+
+    # Iterate through objects in my vector and save them
+    for object in objects
+        if object isa OBJ
+            if isfile(object.filename)
+                # load .obj file
+                mesh::OBJMesh = Mesh.read_obj(object.filename)
+                
+                if object.rotate !== nothing
+                    Mesh.rotate!(mesh, object.rotate)
+                end
+                if object.scale !== nothing
+                    Mesh.scale!(mesh, object.scale)
+                end
+                if object.translate !== nothing
+                    Mesh.translate!(mesh, object.translate)
+                end
+                object_name = last(split(object.filename, '/'))
+                object_name = first(split(object_name, ".obj"))
+                filepath = "$local_folder/$object_name-$(object.translate)-$(object.scale)-$(object.rotate).obj"
+                object.filename = filepath
+                Mesh.write_obj(filepath, mesh)
+            else
+                error("Filepath $(object.filename) does not exist.")
+            end
+        elseif object isa Box
+            scale_factor = (object.max .- object.min) ./ Scalar(2)
+            translate_factor = object.min
+            filepath = "$local_folder/cube-$scale_factor-$translate_factor.obj"
+            object.filename = filepath
+
+            cube::OBJMesh = Mesh.cube_mesh()
+            Mesh.scale!(cube, scale_factor)
+            Mesh.translate!(cube, translate_factor)
+            Mesh.write_obj(filepath, cube)
+
+        elseif object isa Sphere
+            # TODO: save some data into a file that could be read by Unity for their sphere GameObject
+        end
     end
 end
 

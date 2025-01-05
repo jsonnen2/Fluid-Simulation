@@ -1,9 +1,11 @@
 module GfxBase
 
+# TODO: I wish I could just set all global, const, struct in this file to be accessible globally without this export nonsense.
 export Vec3, Vec2
 export OBJ, OBJTriangle, OBJMesh, Shape, Box, Sphere, Triangle, Camera
-export objects, num_particles, delta_time, simulation_steps, smoothing_radius, bounding_box
-export interpolate_normals, cap_acceleration, camera, width, height, global_filepath
+export objects, num_particles, delta_time, simulation_steps, smoothing_radius, bounding_box, console_log
+export interpolate_normals, cap_acceleration, camera, width, height, global_filepath, obj_save_folder, spawn_cube, spawn_type
+export save_obj_files
 
 using StaticArrays
 
@@ -38,7 +40,7 @@ end
 """ Shape
 Every type of object which can be placed in my scene. """
 abstract type Shape end
-struct OBJ <: Shape
+mutable struct OBJ <: Shape
     filename::String
     translate::Union{Vec3, Nothing}
     scale::Union{Vec3, Nothing}
@@ -60,18 +62,20 @@ struct Sphere <: Shape
     radius::Float64
 end
 
-# also cell_size
-global smoothing_radius::Float64 = 400.0
 
-# bounding box for the fluid
-global bounding_box = Box(Vec3(0,0,0), Vec3(50,50,50))
-# TODO: default not nothing. 50 cell width : 4 radius
-bounding_box_center = Scalar(0.5) .* (bounding_box.max .- bounding_box.min) # TODO: OBJ default values are from this equation
+global spawn_cube = Box(Vec3(0,0,0), Vec3(50,50,50))
+global spawn_type = "uniform"
+
+global bounding_box = Box(Vec3(0,0,0), Vec3(50,50,50)) # bounding box for the fluid
+global smoothing_radius::Float64 = 4.0 # hashing cell size
+bounding_box_center::Vec3 = Scalar(0.5) .* (bounding_box.max .- bounding_box.min)
 
 # Objects in the scene
+# TODO: also save $local_file-obj/ for each .obj object after translation, rotation, & scaling.
 global objects = [
-    # TODO: User shouldn't computer bb_center. Set this to default
     OBJ("Mesh/inside_box.obj", bounding_box_center, bounding_box_center, nothing)
+    OBJ("Mesh/bunny.obj", bounding_box_center, Vec3(10,10,10), nothing)
+    # OBJ("Mesh/bunny.obj", Vec3(0,0,0), Vec3(10,10,10), nothing)
 ]
 # toggle to use triangle surface normals, or to interpolate normals using the barycentric coordinates
 global interpolate_normals = true
@@ -83,7 +87,7 @@ mutable struct Camera
     up::Vec3
     focal::Float64
 end
-global camera = Camera(Vec3(0,0,10), Vec3(0,0,1), Vec3(0,1,0), 1.0)
+global camera = Camera(Vec3(25,25,-10), Vec3(0,0,1), Vec3(0,1,0), 1.0)
 # width, height of image in pixels
 global width = 400
 global height = 400
@@ -92,10 +96,16 @@ global height = 400
 global cap_acceleration = 100
 
 # Real Time Simulation
-global delta_time::Float64 = 1/60
-global num_particles::Int = 10
-global simulation_steps::Int = 10
-global global_filepath::String = "C:/J/Unity/Assets/Saved_Fluid_Sims/particle_10.txt"
+global delta_time::Float64 = 1/15
+global num_particles::Int = 10000
+global simulation_steps::Int = 5000
 
+# File stuff
+local_file = "$spawn_type-$num_particles"
+local_file = "splish_splash"
+global global_filepath::String = "C:/J/Unity/3D project/Assets/Saved_Fluid_Sims/$local_file.txt"
+global obj_save_folder::String = "C:/J/Unity/3D project/Assets/Saved_Fluid_Sims/$local_file"
+global save_obj_files = true
+global console_log = true
 
 end # module GfxBase

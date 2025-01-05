@@ -26,15 +26,16 @@ function ray_intersects(object::OBJ, rays::Ray)
     if isfile(object.filename)
         # load .obj file
         mesh = Mesh.read_obj(object.filename)
-        
-        if object.rotate !== nothing
-            Mesh.rotate!(mesh, object.rotate)
-        end
-        if object.scale !== nothing
-            Mesh.scale!(mesh, object.scale)
-        end
-        if object.translate !== nothing
-            Mesh.translate!(mesh, object.translate)
+        if !save_obj_files
+            if object.rotate !== nothing
+                Mesh.rotate!(mesh, object.rotate)
+            end
+            if object.scale !== nothing
+                Mesh.scale!(mesh, object.scale)
+            end
+            if object.translate !== nothing
+                Mesh.translate!(mesh, object.translate)
+            end
         end
     else
         #TODO: run gen_mesh() with the string passed in.
@@ -92,7 +93,7 @@ function ray_intersects(tri::Triangle, rays::Ray)
     beta = (getindex.(rhs, 1) .* (E2[2] .* getindex.(d, 3) .- E2[3] .* getindex.(d, 2)) .-
             E2[1] .* (getindex.(rhs, 2) .* getindex.(d, 3) .- getindex.(rhs, 3) .* getindex.(d, 2)) .+
             getindex.(d, 1) .* (getindex.(rhs, 2) * E2[3] - getindex.(rhs, 3) * E2[2])) ./ M
-    Bmask = (0.0 .< beta .< 1.0) # triangle intersection only occurs with beta ∃ (0,1)
+    Bmask = (0.0 .<= beta .<= 1.0) # triangle intersection only occurs with beta ∃ (0,1)
 
     # Safely broadcast and return empty SVector{3, Float64}[] when the subset is empty
     rhs = something(rhs[Bmask], SVector{3, Float64}[])
@@ -102,11 +103,11 @@ function ray_intersects(tri::Triangle, rays::Ray)
     gamma = (E1[1] .* (getindex.(rhs, 2) .* getindex.(d, 3) .- getindex.(rhs, 3) .* getindex.(d, 2)) .-
             getindex.(rhs, 1) .* (E1[2] .* getindex.(d, 3) .- E1[3] .* getindex.(d, 2)) .+
             getindex.(d, 1) .* (E1[2] * getindex.(rhs, 3) - E1[3] * getindex.(rhs, 2))) ./ M
-    Gmask = (0.0 .< gamma .< 1.0) # triangle intersection only occurs with gamma ∃ (0,1)
+    Gmask = (0.0 .<= gamma .<= 1.0) # triangle intersection only occurs with gamma ∃ (0,1)
     
     # alpha = 1 - beta - gamma
     alpha = 1 .- beta[Bmask][Gmask] .- gamma[Gmask]
-    Amask = (0.0 .< alpha .< 1.0)
+    Amask = (0.0 .<= alpha .<= 1.0)
 
     # Safely broadcast and return empty SVector{3, Float64}[] when rhs[Gmask][Amask] is empty
     rhs = something(rhs[Gmask][Amask], SVector{3, Float64}[])
@@ -171,7 +172,7 @@ function handle_collisions(new_position::Vector{Vec3}, position::Vector{Vec3}, o
     # Initialize Objects
     rays = Ray(new_position .- position, position)
     global_mask = collect(1:num_particles)
-
+    
     # Trace the path of each particle to determine if it intersects an object in the scene.
     while !isempty(rays.direction)
         # Initialize empty storage for ray intersection.
