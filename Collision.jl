@@ -192,7 +192,8 @@ function handle_collisions(new_position::Vector{Vec3}, position::Vector{Vec3}, o
             closest_hitrec.normal[mask] .= hitrec.normal[mask]
         end
         # Perform reflection for all rays which intersect an object
-        collision_mask = findall(closest_hitrec.t .!= Inf)
+        collision_mask = findall(x -> x != Inf && x > 1e-6, closest_hitrec.t)
+        # println(closest_hitrec.t[collision_mask])
         
         d = rays.direction[collision_mask]
         t = closest_hitrec.t[collision_mask]

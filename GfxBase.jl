@@ -71,7 +71,6 @@ global smoothing_radius::Float64 = 4.0 # hashing cell size
 bounding_box_center::Vec3 = Scalar(0.5) .* (bounding_box.max .- bounding_box.min)
 
 # Objects in the scene
-# TODO: also save $local_file-obj/ for each .obj object after translation, rotation, & scaling.
 global objects = [
     OBJ("Mesh/inside_box.obj", bounding_box_center, bounding_box_center, nothing)
     OBJ("Mesh/bunny.obj", bounding_box_center, Vec3(10,10,10), nothing)
