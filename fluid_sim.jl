@@ -22,7 +22,7 @@ function simulate_fluids()
     position = Hash.init_position(spawn_cube, spawn_type)
     position_prev = copy(position)
     velocity = [@SVector zeros(3) for _ in 1:num_particles] # fluid begins at rest
-    mass = fill(10.0, num_particles) # fluid has unit volume
+    mass = fill(1.0, num_particles) # fluid has unit volume
 
     Hash.init_file(global_filepath) # create or clear the file located at global_filepath
         if save_obj_files
@@ -82,11 +82,11 @@ end
         where_negative = findall(x -> any(y -> y < 0, x), position)
         if length(where_negative) > 0
             println(where_negative)
-            println(position[where_negative])
+            println(save_pos[where_negative])
             println()
             println(save_pos_future[where_negative])
             println()
-            println(save_pos[where_negative])
+            println(position[where_negative])
             println(length(where_negative))
         end
 # ???????? seconds

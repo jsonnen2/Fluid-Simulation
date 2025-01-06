@@ -68,6 +68,7 @@ function ray_intersects(object::OBJ, rays::Ray)
     return closest_hitrec
 end
 
+# TODO: I would like to be able to support particles which exist on the boundary of the bounding box
 function ray_intersects(tri::Triangle, rays::Ray)
     # insane speed. A little slower than Math.update_position_and_velocity()
 
@@ -144,9 +145,9 @@ end
 function ray_intersects(sphere::Sphere, rays::Ray)
 
     hitrec = HitRecord(
-            fill(Inf, num_particles), 
-            [@SVector zeros(3) for _ in 1:num_particles], 
-            [@SVector zeros(3) for _ in 1:num_particles])
+            fill(Inf, length(rays.direction)), 
+            [@SVector zeros(3) for _ in 1:length(rays.direction)], 
+            [@SVector zeros(3) for _ in 1:length(rays.direction)])
 
     p::Vector{Vec3} = rays.origin .- Scalar(sphere.center)
     d::Vector{Vec3} = rays.direction
@@ -167,8 +168,50 @@ function ray_intersects(sphere::Sphere, rays::Ray)
     return hitrec
 end
 
+function ray_intersects(box::BoundingBox, rays::Ray)
+    # Ray intersects plane where a box is made from 6 planes.
+
+    hitrec = HitRecord(
+            fill(Inf, length(rays.direction)), # t
+            [@SVector zeros(3) for _ in 1:length(rays.direction)], # intersection
+            [@SVector zeros(3) for _ in 1:length(rays.direction)]) # normal
+
+    # Define 6 planes
+    points = [box.min, box.min, box.min, box.max, box.max, box.max]
+    normals = [Vec3(1,0,0), Vec3(0,1,0), Vec3(0,0,1), Vec3(-1,0,0), Vec3(0,-1,0), Vec3(0,0,-1)]
+
+    for (point, normal) in zip(points, normals)
+
+        t = dot.(Scalar(normal), Scalar(point) .- rays.origin) ./ dot.(Scalar(normal), rays.direction)
+        mask = findall(x -> 0 .< x .< 1, t)
+        if !isempty(mask)
+            compare = (t[mask] .< hitrec.t[mask])
+            hitrec.t[mask[compare]] .= t[mask[compare]]
+            intersect = rays.origin[mask[compare]] .+ t[mask[compare]] .* rays.direction[mask[compare]]
+            hitrec.intersect[mask[compare]] .= intersect
+            hitrec.normal[mask[compare]] .= fill(normal, length(mask[compare]))
+        end
+    end
+
+    return hitrec
+end
+
+function return_home(new_position::Vector{Vec3}, box::BoundingBox)
+
+    # min
+    remainder = Scalar(box.min) .- new_position
+    result = [SVector{3}(map(x -> max(x, 0.0), v)) for v in remainder] # clamp so all particles <0 == 0
+    new_position .+= 2 .* result
+
+    # max
+    remainder = new_position .- Scalar(box.max)
+    result = [SVector{3}(map(x -> max(x, 0.0), v)) for v in remainder] # clamp so all particles <0 == 0
+    new_position .-= 2 .* result
+
+    return new_position
+end
+
 function handle_collisions(new_position::Vector{Vec3}, position::Vector{Vec3}, objects::Vector{<:Shape})
-    save_new_pos = copy(new_position)
     # Initialize Objects
     rays = Ray(new_position .- position, position)
     global_mask = collect(1:num_particles)
@@ -184,6 +227,7 @@ function handle_collisions(new_position::Vector{Vec3}, position::Vector{Vec3}, o
         for object in objects
             # Find intersection data
             hitrec = ray_intersects(object, rays) 
+            # println(hitrec)
             # create a boolean mask of intersections which are closer than the current closest_hitrec
             mask = (hitrec.t .< closest_hitrec.t)
             # Update closest_hitrec for all positions which collided with an object sooner
@@ -193,7 +237,6 @@ function handle_collisions(new_position::Vector{Vec3}, position::Vector{Vec3}, o
         end
         # Perform reflection for all rays which intersect an object
         collision_mask = findall(x -> x != Inf && x > 1e-6, closest_hitrec.t)
-        # println(closest_hitrec.t[collision_mask])
         
         d = rays.direction[collision_mask]
         t = closest_hitrec.t[collision_mask]
@@ -201,13 +244,15 @@ function handle_collisions(new_position::Vector{Vec3}, position::Vector{Vec3}, o
         i = [round.(elem, digits=10) for elem in i]
         n = closest_hitrec.normal[collision_mask]
         r = (1 .- t) .* (d .- 2 .* n .* dot.(d, n)) # reflected rays
-
-        # Update new_position and rays
+        
+        # Update new_position, global_mask, and rays
         new_position[global_mask[collision_mask]] .= i .+ r
         global_mask = global_mask[collision_mask]
-
         rays = Ray(r, i)
     end 
+    # Rarely, a particle can escape from its bounding box. This routine performs reflections across the planes
+    # of the bounding_box so that the particle is inside.
+    new_position = return_home(new_position, bounding_box)
     
     return new_position
 end

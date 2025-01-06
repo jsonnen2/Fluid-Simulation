@@ -142,13 +142,12 @@ function init_position(volume::Box, type::String)
             n += 1
         end
         spacing::Vec3 = (volume.max .- volume.min) ./ n
-        x = collect(0:n-1) .* spacing[1] .+ spacing[1] / 2
+        x = collect(0:n-1) .* spacing[1] .+ spacing[1] / 2 .+ Scalar(volume.min[1])
         x = repeat(x, n^2)[1:num_particles]
-        y = collect(0:n-1) .* spacing[2] .+ spacing[2] / 2
+        y = collect(0:n-1) .* spacing[2] .+ spacing[2] / 2 .+ Scalar(volume.min[2])
         y = repeat(repeat(y, inner=n), n)[1:num_particles]
-        z = collect(0:n-1) .* spacing[3] .+ spacing[3] / 2
+        z = collect(0:n-1) .* spacing[3] .+ spacing[3] / 2 .+ Scalar(volume.min[3])
         z = repeat(z, inner=n^2)[1:num_particles]
-
         position = [@SVector [a,b,c] for (a,b,c) in zip(x,y,z)]
     elseif type == "random"
         # initialize position to a random location within my volume
