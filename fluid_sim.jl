@@ -56,6 +56,10 @@ end
 
         # TODO: graph distribution for each time trial on 10,000 particles
         # Store particles into cells using an indexing technique
+
+        # TODO: Hashing change: different cubes (bounding volumes) around my particle forces.
+        #       smoothing_radius is unique to each force.
+
         print("Hash particles.............. ")
         @time hashed_particles = Hash.generate_hash(position)
 

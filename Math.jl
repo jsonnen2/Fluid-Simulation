@@ -22,7 +22,7 @@ function apply_forces(position::Vector{Vec3}, velocity::Vector{Vec3},
     # iterate over cells
     for cell in 0:hash_max
         
-        nearby::Vector{Int} = Hash.find_neighbors(cell, hash) # TODO: slow. ~0.1 seconds for 10k
+        # nearby::Vector{Int} = Hash.find_neighbors(cell, hash) # TODO: slow. ~0.1 seconds for 10k
         cell_indices::Vector{Int} = hash[cell]
 
         # for i in cell_indices 
@@ -30,10 +30,10 @@ function apply_forces(position::Vector{Vec3}, velocity::Vector{Vec3},
 
             gravitational_force = @SVector [0, -9.81 * mass[i], 0] # gravitational force on Earth
 
-            kernel = kernel_gradient(position[nearby], position[i])
-            pressure_force = mass[i] .* -kernel
+            # kernel = kernel_gradient(position[nearby], position[i])
+            # pressure_force = mass[i] .* -kernel
             
-            acceleration[i] = gravitational_force - sum(pressure_force)
+            acceleration[i] = gravitational_force #- sum(pressure_force)
         end
     end
     contains_nan = any(x -> any(isnan, x), acceleration)
