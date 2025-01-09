@@ -2,7 +2,7 @@
 
 *Collision with a triangle mesh:*
 
-![](image/bunny_collision.gif)   
+![](Images/bunny_collision.gif)   
 
 
 # Unity Instructions
