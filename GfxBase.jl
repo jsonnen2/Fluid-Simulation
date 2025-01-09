@@ -70,16 +70,14 @@ end
 global spawn_cube = Box(Vec3(15,55,15), Vec3(35,70,35))
 global spawn_type = "uniform"
 
-global bounding_box = BoundingBox(Vec3(0,0,0), Vec3(150,70,150)) # bounding box for the fluid
+global bounding_box = BoundingBox(Vec3(-40,-5,0), Vec3(150,70,150)) # bounding box for the fluid
 global smoothing_radius::Float64 = 4.0 # hashing cell size
 bounding_box_center::Vec3 = Scalar(0.5) .* (bounding_box.max .- bounding_box.min)
 
 # Objects in the scene
 global objects = [
-    # OBJ("Mesh/inside_box.obj", bounding_box_center, bounding_box_center, nothing)
     bounding_box
     OBJ("Mesh/bunny.obj", Vec3(25,20,25), Vec3(30,30,30), nothing)
-    # OBJ("Mesh/bunny.obj", Vec3(0,0,0), Vec3(10,10,10), nothing)
 ]
 # toggle to use triangle surface normals, or to interpolate normals using the barycentric coordinates
 global interpolate_normals = true
@@ -100,7 +98,7 @@ global height = 400
 global cap_acceleration = 100
 
 # Real Time Simulation
-global delta_time::Float64 = 1/20
+global delta_time::Float64 = 1/30
 global num_particles::Int = 10000
 global simulation_steps::Int = 5000
 

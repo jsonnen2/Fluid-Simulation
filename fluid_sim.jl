@@ -70,29 +70,16 @@ end
         # Calculate acceleration using the Navier Stokes equation for incompressible fluids
         print("Apply Navier-Stokes......... ")
         @time acceleration = Math.apply_forces(position, velocity, mass, hashed_particles)
-        save_pos = copy(position)
-        save_pos_prev = copy(position_prev)
 
         # Update position and velocity of particles in the system. 
         print("Update position............. ")
         @time position, position_prev, velocity = Math.update_position_and_velocity(position, position_prev, velocity, acceleration, delta_time)
-        save_pos_future = copy(position)
 
         # A ray is traced between position and position_prev. Any ray which collides with
         # an object in the scene is reflected according to the surface normal. 
         print("Detect collisions........... ")
         @time position = Collision.handle_collisions(position, position_prev, objects)
         
-        where_negative = findall(x -> any(y -> y < 0, x), position)
-        if length(where_negative) > 0
-            println(where_negative)
-            println(save_pos[where_negative])
-            println()
-            println(save_pos_future[where_negative])
-            println()
-            println(position[where_negative])
-            println(length(where_negative))
-        end
 # ???????? seconds
         # Create a datatype that is useful for rendering particles on the scene.
         # print("Camera hashing........... ")
